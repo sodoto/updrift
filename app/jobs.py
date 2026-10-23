@@ -22,7 +22,7 @@ KEEP_JOBS = 30
 MANAGERS = {"apt", "apk", "dnf", "pacman"}
 ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 # Minimum update-gateway version per action (older nodes get a clear message instead of a refusal).
-NEEDS_GATEWAY = {"compose-update-stack": 3, "community-update": 4}
+NEEDS_GATEWAY = {"compose-update-stack": 3, "community-update": 5}  # v4 ran it with TERM=dumb: `clear` failed
 
 
 class JobBusy(Exception):

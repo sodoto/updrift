@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.13.1 (2026-10-22)
+- Fix **Update app**: community-script updates stopped right away with "while executing command clear".
+  The update gateway ran them with TERM=dumb, where `clear` fails; it now uses TERM=xterm.
+  Update gateway v5: paste the update setup block from Settings on each node again.
+
 ## 1.13.0 (2026-10-22)
 - **Update app** for community-script LXCs: runs the container's own community-scripts `update` unattended
   (their built-in silent mode), with live output, then re-checks the row. Shown when an app update is found.

@@ -16,7 +16,7 @@
 #   community-update <vmid>            run the LXC's own community-scripts `update` unattended (PHS_SILENT=1),
 #                                      only if /usr/bin/update is a community-scripts one
 set -u
-VERSION=4
+VERSION=5
 
 read -r -d '' UPGRADE <<'EOF'
 # um-upgrade
@@ -84,7 +84,9 @@ if [ ! -f /usr/bin/update ] || ! grep -q "community-scripts/ProxmoxVE" /usr/bin/
 fi
 # PHS_SILENT=1 is the scripts' own unattended mode (no menu). No input is given: a script that asks a
 # question stops instead of waiting forever. stdbuf makes the output show up live.
-export PHS_SILENT=1 TERM=dumb
+# TERM=xterm: the scripts run `clear`, which fails (and stops the update) when TERM is unset or "dumb";
+# with xterm it only prints a few escape codes, which Updrift strips from the output.
+export PHS_SILENT=1 TERM=xterm
 lb=""; command -v stdbuf >/dev/null 2>&1 && lb="stdbuf -oL -eL"
 to=""; command -v timeout >/dev/null 2>&1 && to="timeout 45m"
 echo "+ PHS_SILENT=1 update"
