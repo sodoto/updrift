@@ -8,6 +8,7 @@ const Jobs = (() => {
     if (action === "upgrade") return i.kind === "lxc" && i.vmid != null && MANAGERS.includes(i.manager) && i.update_count > 0;
     if (action === "reboot") return i.kind === "lxc" && i.vmid != null;
     if (action === "compose-update") return i.kind === "docker" && i.vmid != null && !!i.compose_dir && !!i.container_id;
+    if (action === "community-update") return i.kind === "lxc" && i.vmid != null && !!i.community_script;
     if (action === "compose-update-stack")
       return i.kind === "docker" && i.vmid != null && !!i.compose_dir && !!i.container_id && !!i.compose_project;
     return false;
@@ -23,10 +24,15 @@ const Jobs = (() => {
   };
 
   function commands(i, action) {
+    if (action === "community-update") return [
+      { label: "Updrift asks Proxmox:", cmd: `community-update ${i.vmid}` },
+      { label: `Proxmox runs inside CT ${i.vmid} (${i.name}):`, cmd: "PHS_SILENT=1 update" },
+    ];
     if (action === "reboot") return [
       { label: "Updrift asks Proxmox:", cmd: `reboot-lxc ${i.vmid}` },
       { label: "Proxmox runs:", cmd: `pct reboot ${i.vmid}` },
     ];
+    if (action === "community-update") return i.kind === "lxc" && i.vmid != null && !!i.community_script;
     if (action === "compose-update-stack") {
       const p = ` -p ${i.compose_project}`;
       return [
@@ -51,10 +57,21 @@ const Jobs = (() => {
   }
 
   function confirmation(i, action) {
+    if (action === "community-update") {
+      const apps = (i.app_updates || []).filter(a => a.update);
+      return {
+        title: `Update the app on ${i.name}?`, ok: "Update app",
+        message: (apps.length ? apps.map(a => `• ${a.name}: ${a.current} → ${a.latest}`).join("\n") + "\n\n" : "")
+          + `Runs the container's own community-script update (downloaded from GitHub), unattended, `
+          + `exactly like typing update in its console. It may restart the app and update its data.`
+          + `\n\nA few scripts ask questions during an update: those stop with an error, then run update in the console instead.`,
+      };
+    }
     if (action === "reboot") return {
       title: `Restart ${i.name}?`, ok: "Restart", danger: true,
       message: `CT ${i.vmid} will restart now. Its services will be unavailable for a moment.`,
     };
+    if (action === "community-update") return i.kind === "lxc" && i.vmid != null && !!i.community_script;
     if (action === "compose-update-stack") {
       const members = Dashboard.stack(i);
       const state = (m) => m.status === "update_available" ? dockerUpdateLabel(m)
@@ -141,6 +158,8 @@ const Jobs = (() => {
     if (r) { const item = Dashboard.item(r.dataset.jobReboot); if (item) start(item, "reboot"); return; }
     const v = e.target.closest("[data-job-view]");
     if (v) { view(v.dataset.jobView); return; }
+    const ap = e.target.closest("[data-apply-app]");
+    if (ap) { const item = Dashboard.item(ap.dataset.applyApp); if (item) start(item, "community-update"); return; }
     const st = e.target.closest("[data-apply-stack]");
     if (st) { const item = Dashboard.item(st.dataset.applyStack); if (item) start(item, "compose-update-stack"); return; }
     const a = e.target.closest("[data-apply]");

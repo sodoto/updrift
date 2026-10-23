@@ -156,6 +156,8 @@ const Dashboard = (() => {
     if (job) buttons.push(`<button class="small" data-job-view="${esc(job.id)}"><span class="spin"></span> Updating…</button>`);
     else if (state.allow_updates && i.status === "update_available" && Jobs.canApply(i))
       buttons.push(`<button class="primary" data-apply="${esc(i.id)}">Update</button>`);
+    if (!job && state.allow_updates && (i.app_updates || []).some(a => a.update) && Jobs.canApply(i, "community-update"))
+      buttons.push(`<button class="primary" data-apply-app="${esc(i.id)}">Update app</button>`);
     if (i.kind === "docker" && i.status === "update_available" && i.release_url)
       buttons.push(`<a class="btn" href="${esc(i.release_url)}" target="_blank" rel="noopener">Release notes ↗</a>`);
     if (i.status === "update_available")

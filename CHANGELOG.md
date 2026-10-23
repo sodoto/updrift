@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.13.0 (2026-10-22)
+- **Update app** for community-script LXCs: runs the container's own community-scripts `update` unattended
+  (their built-in silent mode), with live output, then re-checks the row. Shown when an app update is found.
+  The confirmation lists the versions and the exact command.
+- Scripts that ask questions during an update stop with an error instead of waiting (13 of 633 scripts do).
+- Job output is cleaned of colors and redrawn progress lines.
+- Update gateway v4: paste the update setup block from Settings on each node again.
+
 ## 1.12.0 (2026-10-16)
 - Docker updates show versions: "v3.3.2 → v3.3.3" instead of "New image", read from the running image and
   the new one (the standard org.opencontainers.image.version label). "Rebuilt image" when the version is

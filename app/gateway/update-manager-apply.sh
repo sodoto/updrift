@@ -13,8 +13,10 @@
 #                                      service come from the container's own labels, never from the caller
 #   compose-update-stack <vmid> <container>
 #                                      same, for every service of that container's Compose project (the stack)
+#   community-update <vmid>            run the LXC's own community-scripts `update` unattended (PHS_SILENT=1),
+#                                      only if /usr/bin/update is a community-scripts one
 set -u
-VERSION=3
+VERSION=4
 
 read -r -d '' UPGRADE <<'EOF'
 # um-upgrade
@@ -75,6 +77,20 @@ echo "+ $dc $* up -d $svc"
 $dc "$@" up -d $svc
 EOF
 
+read -r -d '' CSUPDATE <<'EOF'
+# um-community-update
+if [ ! -f /usr/bin/update ] || ! grep -q "community-scripts/ProxmoxVE" /usr/bin/update 2>/dev/null; then
+  echo "This container was not created with a community script (no community-scripts /usr/bin/update)."; exit 3
+fi
+# PHS_SILENT=1 is the scripts' own unattended mode (no menu). No input is given: a script that asks a
+# question stops instead of waiting forever. stdbuf makes the output show up live.
+export PHS_SILENT=1 TERM=dumb
+lb=""; command -v stdbuf >/dev/null 2>&1 && lb="stdbuf -oL -eL"
+to=""; command -v timeout >/dev/null 2>&1 && to="timeout 45m"
+echo "+ PHS_SILENT=1 update"
+exec $to $lb bash /usr/bin/update </dev/null
+EOF
+
 CMD="${SSH_ORIGINAL_COMMAND:-}"
 
 deny() {
@@ -116,6 +132,11 @@ case "${ARGS[0]:-}" in
     [[ "${ARGS[2]}" =~ ^[0-9a-f]{12,64}$ ]] || deny
     logger -t update-manager-apply "compose-update-stack $VMID ${ARGS[2]}" 2>/dev/null
     exec pct exec "$VMID" -- sh -c "$COMPOSE" sh "${ARGS[2]}" stack ;;
+  community-update)
+    [ "$N" -eq 2 ] || deny
+    need_vmid
+    logger -t update-manager-apply "community-update $VMID" 2>/dev/null
+    exec pct exec "$VMID" -- sh -c "$CSUPDATE" ;;
   *)
     deny ;;
 esac

@@ -5,10 +5,12 @@ Only three actions exist, matching gateway/update-manager-apply.sh:
   reboot          restart an LXC
   compose-update  pull + recreate one Docker Compose service inside an LXC
   compose-update-stack  same for every service of that container's Compose project
+  community-update  run a community-script LXC's own `update`, unattended
 """
 import asyncio
 import itertools
 import logging
+import re
 from datetime import datetime, timezone
 
 from .proxmox import APPLY_VERSION, UpdateSession
@@ -18,6 +20,9 @@ log = logging.getLogger("update-manager")
 MAX_LINES = 4000
 KEEP_JOBS = 30
 MANAGERS = {"apt", "apk", "dnf", "pacman"}
+ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+# Minimum update-gateway version per action (older nodes get a clear message instead of a refusal).
+NEEDS_GATEWAY = {"compose-update-stack": 3, "community-update": 4}
 
 
 class JobBusy(Exception):
@@ -29,6 +34,8 @@ def _now() -> str:
 
 
 def can_apply(item: dict, action: str) -> bool:
+    if action == "community-update":
+        return item["kind"] == "lxc" and item.get("vmid") is not None and bool(item.get("community_script"))
     if action in ("upgrade", "reboot"):
         return item["kind"] == "lxc" and item.get("vmid") is not None and (
             action == "reboot" or (item.get("manager") in MANAGERS and item.get("update_count", 0) > 0))
@@ -54,7 +61,7 @@ class Job:
         self.item_ids = item_ids or [item["id"]]  # every row this job changes (all containers of a stack)
         self.action = action
         verb = {"upgrade": "Installing updates on", "reboot": "Restarting", "compose-update": "Updating",
-                "compose-update-stack": "Updating stack"}[action]
+                "compose-update-stack": "Updating stack", "community-update": "Updating the app on"}[action]
         name = item.get("compose_project") if action == "compose-update-stack" else item["name"]
         where = f"CT {item['vmid']}" if item["kind"] == "lxc" else item.get("lxc_name") or f"CT {item['vmid']}"
         self.title = f"{verb} {name} ({where})"
@@ -67,7 +74,12 @@ class Job:
         self.lines: list[str] = []
 
     def add(self, line: str) -> None:
-        self.lines.append(line)
+        # Scripts draw progress with colors and carriage returns: keep the final text of each line.
+        line = ANSI_RE.sub("", line)
+        if "\r" in line:
+            parts = [p for p in line.split("\r") if p.strip()]
+            line = parts[-1] if parts else ""
+        self.lines.append(line.rstrip())
         if len(self.lines) > MAX_LINES:
             del self.lines[: len(self.lines) - MAX_LINES]
 
@@ -118,6 +130,8 @@ class JobRunner:
             args = ("reboot-lxc", vmid)
         elif action == "compose-update-stack":
             args = ("compose-update-stack", vmid, item["container_id"])
+        elif action == "community-update":
+            args = ("community-update", vmid)
         else:
             args = ("compose-update", vmid, item["container_id"])
         recheck = job.item_ids
@@ -133,8 +147,9 @@ class JobRunner:
                 version = await session.apply_version()
                 if version is None:
                     raise RuntimeError(UpdateSession.not_authorized)
-                if args[0] == "compose-update-stack" and version < 3:
-                    raise RuntimeError(f"Update stack needs update gateway v3 (this node has v{version}): "
+                needed = NEEDS_GATEWAY.get(args[0], 1)
+                if version < needed:
+                    raise RuntimeError(f"This action needs update gateway v{needed} (this node has v{version}): "
                                        "paste the update setup block from Settings on this node again")
                 if version < APPLY_VERSION:
                     job.add(f"Note: this node has update gateway v{version}; output may only appear at the end. "

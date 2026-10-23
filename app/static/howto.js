@@ -131,6 +131,10 @@ const HowTo = (() => {
   function open(item, allowUpdates) {
     if (!item) return;
     let body = item.kind === "lxc" ? lxc(item) : item.kind === "host" ? host(item) : docker(item);
+    if (allowUpdates && (item.app_updates || []).some(a => a.update) && Jobs.canApply(item, "community-update")) {
+      body = body.replace("</h3>", `</h3><div class="note run-note"><span>Updrift can update the app for you.</span>
+        <button class="primary" data-apply-app="${esc(item.id)}">Update app</button></div>`);
+    }
     if (allowUpdates && Jobs.canApply(item)) {
       // Offer to run it from the app, right under the title.
       body = body.replace("</h3>", `</h3><div class="note run-note"><span>Updrift can do this for you.</span>
